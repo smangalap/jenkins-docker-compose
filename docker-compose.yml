@@ -1,0 +1,85 @@
+services:
+
+  # Docker-in-Docker service.
+  docker:
+    image: docker:28-dind
+    container_name: jenkins-docker
+    privileged: true
+    restart: unless-stopped
+
+    # Enable TLS so communication between Jenkins and Docker is encrypted.
+    environment:
+      DOCKER_TLS_CERTDIR: /certs
+
+    # Store TLS certificates and Docker build data persistently.
+    volumes:
+      - jenkins-docker-certs:/certs/client
+      - jenkins-docker-data:/var/lib/docker
+
+    # Docker is accessible only inside this Compose network.
+    networks:
+      - jenkins-network
+
+    # Check that the Docker daemon is running correctly.
+    healthcheck:
+      test: ["CMD", "docker", "info"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  # Jenkins CI/CD server.
+  jenkins:
+    build:
+      context: ./jenkins
+    container_name: jenkins
+    restart: unless-stopped
+
+    # Run Jenkins using its normal non-root Jenkins account.
+    user: jenkins
+
+    # Wait until the Docker service is healthy.
+    depends_on:
+      docker:
+        condition: service_healthy
+
+    environment:
+      # Tell Jenkins where the Docker daemon is located.
+      DOCKER_HOST: tcp://docker:2376
+
+      # Location of the TLS client certificates.
+      DOCKER_CERT_PATH: /certs/client
+
+      # Require TLS verification when Jenkins communicates with Docker.
+      DOCKER_TLS_VERIFY: "1"
+
+    # Restrict Jenkins web access to the local Ubuntu machine.
+    ports:
+      - "127.0.0.1:8080:8080"
+
+    # Preserve Jenkins configuration and provide Docker TLS certificates.
+    volumes:
+      - jenkins-data:/var/jenkins_home
+      - jenkins-docker-certs:/certs/client:ro
+
+    networks:
+      - jenkins-network
+
+
+# Private network used for communication between Jenkins and Docker.
+networks:
+  jenkins-network:
+    driver: bridge
+
+
+# Persistent storage used by Jenkins and Docker.
+volumes:
+
+  # Stores Jenkins jobs, plugins and configuration.
+  jenkins-data:
+
+  # Stores TLS certificates used between Jenkins and Docker.
+  jenkins-docker-certs:
+
+  # Stores Docker images and build data created by the DinD service.
+  jenkins-docker-data:
