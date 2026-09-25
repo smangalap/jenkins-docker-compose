@@ -11,10 +11,11 @@ services:
     environment:
       DOCKER_TLS_CERTDIR: /certs
 
-    # Store TLS certificates and Docker build data persistently.
+    # Store TLS certificates, Docker build data, and Jenkins workspace persistently.
     volumes:
       - jenkins-docker-certs:/certs/client
       - jenkins-docker-data:/var/lib/docker
+      - jenkins-data:/var/jenkins_home
 
     # Docker is accessible only inside this Compose network.
     networks:
